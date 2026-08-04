@@ -35,10 +35,10 @@ import { BlockType } from './World';
  */
 export class ChunkManager {
     /** World width along the X axis in blocks. */
-  public static readonly WORLD_SIZE_X = 128;
+  public static readonly WORLD_SIZE_X = 512;
 
   /** World depth along the Z axis in blocks. */
-  public static readonly WORLD_SIZE_Z = 128;
+  public static readonly WORLD_SIZE_Z = 512;
 
   /** World height along the Y axis in blocks. */
   public static readonly WORLD_HEIGHT = 128;
