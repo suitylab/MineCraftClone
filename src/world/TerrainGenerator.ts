@@ -11,6 +11,8 @@
  * - Grass surfaces with dirt and stone beneath (above sea level)
  * - Stone surfaces at high elevations
  * - Scattered trees on grass surfaces using 3D noise clustering
+ * - Interconnected multi-layer cave systems carved from the stone
+ *   underground and inside mountains (cavern chambers + worm tunnels)
  *
  * The generator is deterministic — the same seed always produces the
  * same world. Different seeds produce completely different terrain.
@@ -29,7 +31,9 @@ import { CHUNK_SIZE } from './Chunk';
  * The generation algorithm works in two phases:
  * 1. **Terrain fill**: For each (x, z) column, compute the surface height
  *    using multi-octave FBM noise, then fill the column with appropriate
- *    block types based on the height relative to sea level.
+ *    block types based on the height relative to sea level. Cave carving
+ *    runs inline during the fill — each solid block is checked against a
+ *    dedicated 3D noise field and carved to AIR where a cave exists.
  * 2. **Tree placement**: After terrain is generated, scatter trees on
  *    grass surfaces using 3D noise for natural clustering.
  *
@@ -63,11 +67,44 @@ export class TerrainGenerator {
   /** Maximum tree height in blocks (trunk only, excluding leaves). */
   public static readonly MAX_TREE_HEIGHT = 6;
 
+  /** Horizontal scale (X/Z) of the cavern noise field. */
+  public static readonly CAVE_CAVERN_SCALE_XZ = 0.015;
+
+  /** Vertical scale (Y) of the cavern noise field — creates layered chambers. */
+  public static readonly CAVE_CAVERN_SCALE_Y = 0.020;
+
+  /** Octaves used by the cavern FBM field. */
+  public static readonly CAVE_CAVERN_OCTAVES = 3;
+
+  /** Cavern carve threshold — a block becomes AIR where the noise exceeds this. */
+  public static readonly CAVE_CAVERN_THRESHOLD = 0.62;
+
+  /** Cavern threshold near the surface (suppresses sinkholes). */
+  public static readonly CAVE_CAVERN_THRESHOLD_SURFACE = 0.76;
+
+  /** Horizontal scale (X/Z) of the ridged tunnel noise field. */
+  public static readonly CAVE_TUNNEL_SCALE_XZ = 0.035;
+
+  /** Vertical scale (Y) of the ridged tunnel noise field. */
+  public static readonly CAVE_TUNNEL_SCALE_Y = 0.045;
+
+  /** Tunnel carve threshold — 1 - |noise| above this creates worm-like channels. */
+  public static readonly CAVE_TUNNEL_THRESHOLD = 0.88;
+
+  /** Tunnel threshold near the surface (suppresses sinkholes). */
+  public static readonly CAVE_TUNNEL_THRESHOLD_SURFACE = 0.93;
+
+  /** Blocks below the surface within which carving is suppressed. */
+  public static readonly CAVE_SURFACE_PROTECTION = 4;
+
   /** The seed used for noise generation. Stored for reproducibility. */
   private readonly _seed: number;
 
   /** The Simplex noise instance used for all noise computations. */
   private readonly _noise: SimplexNoise;
+
+  /** Independently-seeded noise instance used for cave carving. */
+  private readonly _caveNoise: SimplexNoise;
 
   /**
    * Creates a new TerrainGenerator with the given seed.
@@ -88,6 +125,10 @@ export class TerrainGenerator {
 
     // Create the noise instance with the stored seed
     this._noise = new SimplexNoise(this._seed);
+
+    // Create the cave noise instance from a derived seed so cave layout
+    // varies independently of the terrain while remaining deterministic.
+    this._caveNoise = new SimplexNoise(this._seed + 1);
   }
 
   /**
@@ -262,6 +303,13 @@ export class TerrainGenerator {
         }
       }
 
+      // --- Cave carving ---
+      // Carve the solid block to AIR where a cave exists, keeping the
+      // bedrock layer and (mostly) the surface intact.
+      if (this.isCaveBlock(x, y, z, height)) {
+        blockType = BlockType.AIR;
+      }
+
       // Set the block at this position
       chunkManager.setBlock(x, y, z, blockType);
     }
@@ -273,6 +321,94 @@ export class TerrainGenerator {
         chunkManager.setBlock(x, y, z, BlockType.WATER);
       }
     }
+  }
+
+  /**
+   * Determines whether the block at the given position should be carved
+   * out to create a cave.
+   *
+   * Cave carving combines two independent 3D noise systems:
+   * 1. **Cavern field** (multi-octave FBM): air where the value exceeds the
+   *    carve threshold. Because simplex noise is continuous, the carved
+   *    regions naturally merge into a single sprawling, interconnected
+   *    network of chambers spanning multiple vertical layers.
+   * 2. **Tunnel field** (ridged noise): computes `1 - |noise|`, whose high
+   *    values trace the zero-crossing surface of the noise. This carves
+   *    thin, worm-like channels that branch in all directions and link the
+   *    cavern chambers into a 四通八达 (well-connected) tunnel system.
+   *
+   * Carving behaviour:
+   * - The bedrock layer (y = 0) is never carved.
+   * - Within the top `CAVE_SURFACE_PROTECTION` blocks below the surface,
+   *   both thresholds are raised so the landscape rarely collapses into
+   *   sinkholes — but occasional natural cave mouths still open up,
+   *   especially on steep mountain sides.
+   *
+   * @param x - World X coordinate of the block.
+   * @param y - World Y coordinate of the block.
+   * @param z - World Z coordinate of the block.
+   * @param surfaceHeight - The terrain surface height of this column.
+   * @returns True if the block should be carved to AIR.
+   */
+  private isCaveBlock(
+    x: number,
+    y: number,
+    z: number,
+    surfaceHeight: number
+  ): boolean {
+    // Never carve the bedrock layer.
+    if (y <= 1) {
+      return false;
+    }
+
+    // Distance below the terrain surface. Near-surface carving is
+    // suppressed so the world keeps a walkable surface, while deeper
+    // blocks are carved more freely.
+    const depthBelowSurface = surfaceHeight - y;
+    const nearSurface =
+      depthBelowSurface < TerrainGenerator.CAVE_SURFACE_PROTECTION;
+
+    const cavernThreshold = nearSurface
+      ? TerrainGenerator.CAVE_CAVERN_THRESHOLD_SURFACE
+      : TerrainGenerator.CAVE_CAVERN_THRESHOLD;
+    const tunnelThreshold = nearSurface
+      ? TerrainGenerator.CAVE_TUNNEL_THRESHOLD_SURFACE
+      : TerrainGenerator.CAVE_TUNNEL_THRESHOLD;
+
+    // --- Cavern field ---
+    // Multi-octave FBM carved above a threshold. The vertical scale is
+    // kept close to the horizontal scale so chambers stack across many
+    // levels instead of forming flat pancakes.
+    const cavern = this._caveNoise.fbm3D(
+      x * TerrainGenerator.CAVE_CAVERN_SCALE_XZ,
+      y * TerrainGenerator.CAVE_CAVERN_SCALE_Y,
+      z * TerrainGenerator.CAVE_CAVERN_SCALE_XZ,
+      TerrainGenerator.CAVE_CAVERN_OCTAVES,
+      2.0,
+      0.5
+    );
+    if (cavern > cavernThreshold) {
+      return true;
+    }
+
+    // --- Tunnel field ---
+    // Ridged noise: 1 - |noise| peaks along the noise's zero surface,
+    // carving branching worm tunnels that connect the caverns.
+    const ridge =
+      1 -
+      Math.abs(
+        this._caveNoise.noise3D(
+          x * TerrainGenerator.CAVE_TUNNEL_SCALE_XZ,
+          y * TerrainGenerator.CAVE_TUNNEL_SCALE_Y,
+          z * TerrainGenerator.CAVE_TUNNEL_SCALE_XZ
+        )
+      );
+    if (ridge > tunnelThreshold) {
+      return true;
+    }
+
+    // Not part of any cave — leave the block solid.
+    return false;
   }
 
   /**
