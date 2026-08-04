@@ -2,16 +2,16 @@
  * ChunkManager.ts — Chunk management system for the Minecraft Clone.
  *
  * The ChunkManager coordinates the storage and retrieval of chunks that
- * make up the voxel world. The world spans 512×512 blocks horizontally
- * (32 chunks × 16 blocks per chunk = 512) and 128 blocks vertically.
+ * make up the voxel world. The world spans 128×128 blocks horizontally
+ * (8 chunks × 16 blocks per chunk = 128) and 128 blocks vertically.
  *
  * World coordinate system:
- * - X axis: [-256, 255] (centered on player spawn)
+ * - X axis: [-64, 63] (centered on player spawn)
  * - Y axis: [0, 127] (bedrock at y=0)
- * - Z axis: [-256, 255] (centered on player spawn)
+ * - Z axis: [-64, 63] (centered on player spawn)
  *
- * Chunk grid: 32×8×32 chunks, where each chunk is 16×16×16 blocks.
- * Chunk coordinates range from (-16, 0, -16) to (15, 7, 15).
+ * Chunk grid: 8×8×8 chunks, where each chunk is 16×16×16 blocks.
+ * Chunk coordinates range from (-4, 0, -4) to (3, 7, 3).
  *
  * The ChunkManager is a pure data container — it has no dependency on
  * Three.js and does not handle rendering. Rendering is performed
@@ -35,10 +35,10 @@ import { BlockType } from './World';
  */
 export class ChunkManager {
     /** World width along the X axis in blocks. */
-  public static readonly WORLD_SIZE_X = 512;
+  public static readonly WORLD_SIZE_X = 128;
 
   /** World depth along the Z axis in blocks. */
-  public static readonly WORLD_SIZE_Z = 512;
+  public static readonly WORLD_SIZE_Z = 128;
 
   /** World height along the Y axis in blocks. */
   public static readonly WORLD_HEIGHT = 128;
@@ -341,9 +341,9 @@ export class ChunkManager {
    * Checks whether the given world coordinates are within world bounds.
    *
    * Valid ranges:
-   * - X: [WORLD_MIN_X, WORLD_MAX_X] = [-64, 63]
+   * - X: [WORLD_MIN_X, WORLD_MAX_X] = [-16, 15]
    * - Y: [WORLD_MIN_Y, WORLD_MAX_Y] = [0, 127]
-   * - Z: [WORLD_MIN_Z, WORLD_MAX_Z] = [-64, 63]
+   * - Z: [WORLD_MIN_Z, WORLD_MAX_Z] = [-16, 15]
    *
    * @param worldX - World X coordinate.
    * @param worldY - World Y coordinate (vertical).

@@ -523,7 +523,7 @@ export class Game {
         // --- Distance-Based Chunk Culling ---
     // Hide chunks whose horizontal center distance from the camera exceeds
     // the fog far plane (85 blocks). This improves rendering performance
-    // on the expanded 512×512 world by reducing the number of visible chunks.
+    // on the expanded 128×128 world by reducing the number of visible chunks.
     this.chunkMesh.updateCulling(this.camera.position, 85);
 
     // --- Block Interaction ---
@@ -1019,7 +1019,7 @@ export class Game {
    * creates the chunk mesh, player, and WorldReset orchestrator.
    *
    * Deferring world generation from init() to here ensures the main menu
-   * appears immediately without a long freeze, since generating the 512×512
+   * appears immediately without a long freeze, since generating the 128×128
    * world is a heavy synchronous operation.
    */
   private _setupInitialGameWorld(): void {
