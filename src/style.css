@@ -1,0 +1,673 @@
+/* Global stylesheet for the fullscreen Three.js Minecraft clone */
+
+/* Reset html and body to fill the viewport with no margins, padding, or scrollbars */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* The #app container fills the entire viewport */
+#app {
+  width: 100vw;
+  height: 100vh;
+  /* Dark background as fallback while WebGL initializes */
+  background-color: #000;
+}
+
+/* Ensure the canvas created by Three.js renderer fills the screen */
+#app canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Crosshair HUD element — centered on screen, above the canvas */
+#crosshair {
+  /* Fixed positioning so it stays centered regardless of scroll */
+  position: fixed;
+  /* Center horizontally and vertically */
+  top: 50%;
+  left: 50%;
+  /* Offset by half the element's own dimensions to truly center */
+  transform: translate(-50%, -50%);
+  /* White color for visibility against most terrain */
+  color: #ffffff;
+  /* Large enough to be clearly visible but not obstructive */
+    font-size: clamp(20px, 3.5vmin, 48px);
+  font-weight: bold;
+  /* Critical: allow clicks to pass through to the canvas for Pointer Lock */
+  pointer-events: none;
+  /* Ensure the crosshair renders above the WebGL canvas */
+  z-index: 1000;
+  /* Subtle shadow for visibility against bright backgrounds (sky, sand) */
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 0, 0, 0.5);
+  /* Prevent text selection when clicking */
+  user-select: none;
+  /* Prevent touch callout on mobile devices */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+    /* Prevent context menu on long-press (mobile) */
+  -webkit-touch-callout: none;
+}
+
+/* ============================================================
+   Hotbar UI — 9-slot quick-select bar at the bottom center
+   ============================================================ */
+
+/* Container: fixed at bottom-center, flexbox row, 9 equal slots */
+#hotbar {
+    position: fixed;
+  bottom: clamp(10px, 2.5vmin, 30px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(4px, 0.8vmin, 10px);
+  padding: clamp(6px, 1vmin, 14px) clamp(8px, 1.5vmin, 20px);
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+  z-index: 2000;
+  /* Allow wheel events to reach the hotbar for slot cycling */
+  pointer-events: auto;
+  /* Prevent the hotbar from exceeding the viewport width */
+  max-width: 90vw;
+  /* Allow flex children to shrink on narrow windows */
+  flex-shrink: 1;
+  /* Subtle border for definition against bright terrain */
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  /* Soft shadow for depth */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  /* Counter for slot number labels (1-9) */
+  counter-reset: hotbar-slot;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Individual slot: 48x48, bordered, pixel-art icon */
+.hotbar-slot {
+  width: clamp(28px, 6vmin, 64px);
+  height: clamp(28px, 6vmin, 64px);
+  flex: 0 1 auto;
+  min-width: 0;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  /* Smooth transitions for hover/selection effects */
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+  /* Crisp pixel-art icons */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  /* Position relative for the ::before number label */
+  position: relative;
+  /* Increment the slot counter for each slot */
+  counter-increment: hotbar-slot;
+  /* Prevent text selection */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Slot number label (top-left corner, 1-9) */
+.hotbar-slot::before {
+  content: counter(hotbar-slot);
+  position: absolute;
+  top: 2px;
+  left: 4px;
+    font-size: clamp(8px, 1.4vmin, 16px);
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 0 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 2;
+  line-height: 1;
+}
+
+/* Hover effect on non-selected slots */
+.hotbar-slot:hover {
+  filter: brightness(1.2);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Selected slot: white border, glow, slight scale-up */
+.hotbar-slot.selected {
+  border: 2px solid #ffffff;
+  box-shadow:
+    0 0 8px rgba(255, 255, 255, 0.5),
+    0 0 16px rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+  z-index: 3;
+  filter: brightness(1.1);
+}
+
+/* Responsive: vmin-based scaling keeps the hotbar proportional to the viewport.
+   The clamp() function ensures minimum and maximum sizes are respected,
+   preventing the hotbar from becoming unusable on extreme screen sizes.
+   Note: A window resize handler is NOT required — vmin units automatically
+   recalculate when the viewport changes, keeping the HUD perfectly scaled. */
+@media (max-width: 600px) {
+  #hotbar {
+    bottom: clamp(8px, 2vmin, 20px);
+    gap: clamp(3px, 0.6vmin, 8px);
+    padding: clamp(5px, 0.8vmin, 10px) clamp(6px, 1.2vmin, 14px);
+  }
+
+  .hotbar-slot {
+    width: clamp(24px, 5vmin, 48px);
+    height: clamp(24px, 5vmin, 48px);
+    border-width: 1.5px;
+  }
+
+  .hotbar-slot::before {
+    font-size: clamp(7px, 1.2vmin, 12px);
+    top: 1px;
+    left: 3px;
+  }
+}
+
+/* Extra-small screens: even smaller */
+@media (max-width: 400px) {
+  .hotbar-slot {
+    width: clamp(20px, 4vmin, 36px);
+    height: clamp(20px, 4vmin, 36px);
+  }
+
+  .hotbar-slot::before {
+    font-size: clamp(6px, 1vmin, 10px);
+  }
+}
+
+/* ============================================================
+   Phase 7: Menu Screens (Main Menu, Pause, Controls, About, Loading)
+   ============================================================ */
+
+/* Hidden utility class — overrides any display value */
+.hidden {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================
+   Menu Screen Base — shared by main menu, pause, controls, about
+   ============================================================ */
+
+/* Fullscreen fixed overlay with flex centering */
+.menu-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Subtle dark gradient so the rotating block scene shows through */
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.6),
+    rgba(0, 0, 0, 0.3)
+  );
+  z-index: 3000;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: auto;
+}
+
+/* Hidden state for menu screens */
+.menu-screen.hidden {
+  display: none !important;
+  pointer-events: none;
+}
+
+/* Menu title — large pixel-style font with glow */
+.menu-screen .menu-title {
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  font-size: 48px;
+  color: #fff;
+  text-align: center;
+  letter-spacing: 2px;
+  margin: 0 0 40px 0;
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.5),
+    0 0 20px rgba(255, 255, 255, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Menu buttons container — vertical stack with gap */
+.menu-screen .menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  max-width: 300px;
+}
+
+/* Menu buttons container children — no extra margins (gap handles spacing) */
+.menu-screen .menu-buttons .menu-button {
+  margin: 0;
+}
+
+/* Menu button — base styling */
+.menu-screen .menu-button {
+  min-width: 220px;
+  width: 100%;
+  padding: 14px 32px;
+  font-size: 18px;
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+/* Menu button hover — brighten and glow */
+.menu-screen .menu-button:hover {
+  filter: brightness(1.2);
+  border-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
+}
+
+/* Menu button active — scale down for click feedback */
+.menu-screen .menu-button:active {
+  transform: scale(0.95);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Menu button focus — visible focus ring */
+.menu-screen .menu-button:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+/* Back button — positioned at the bottom of the container */
+.menu-screen .back-button {
+  margin-top: 20px;
+  margin-bottom: 40px;
+}
+
+/* ============================================================
+   Pause Menu — darker background, smaller title
+   ============================================================ */
+
+.pause-menu {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.pause-menu .menu-title {
+  font-size: 36px;
+}
+
+/* ============================================================
+   Controls Screen
+   ============================================================ */
+
+.controls-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.controls-screen .menu-title {
+  font-size: 36px;
+  color: #fff;
+  text-align: center;
+  margin: 0 0 30px 0;
+}
+
+/* Controls table — two-column key/description table */
+.controls-table {
+  border-collapse: collapse;
+  min-width: 400px;
+  margin-bottom: 40px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+/* Table header cells */
+.controls-table th {
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-weight: bold;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+  font-size: 16px;
+}
+
+/* Table data cells */
+.controls-table td {
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+}
+
+/* Last row — no bottom border */
+.controls-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Alternating row backgrounds */
+.controls-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.controls-table tbody tr:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Key column — centered, gold, bold */
+.controls-table th.controls-key,
+.controls-table td.controls-key {
+  text-align: center;
+  width: 120px;
+  color: #ffd700;
+  font-weight: bold;
+}
+
+/* Description column — left-aligned, light gray */
+.controls-table th.controls-desc,
+.controls-table td.controls-desc {
+  text-align: left;
+  width: auto;
+  color: #e0e0e0;
+}
+
+/* Back button for controls screen */
+.controls-screen .back-button {
+  margin-top: 20px;
+}
+
+/* ============================================================
+   About Screen
+   ============================================================ */
+
+.about-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.about-screen .menu-title {
+  font-size: 36px;
+  color: #fff;
+  text-align: center;
+  margin: 0 0 30px 0;
+}
+
+/* About info panel — styled card */
+.about-panel {
+  min-width: 400px;
+  padding: 24px 32px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  margin-bottom: 40px;
+  font-family: inherit;
+}
+
+/* About item row — label left, value right */
+.about-panel .about-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Last about item — no bottom border */
+.about-panel .about-item:last-child {
+  border-bottom: none;
+}
+
+/* About label — muted color, left side */
+.about-panel .about-label {
+  flex-shrink: 0;
+  margin-right: 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+/* About value — bright color, right side */
+.about-panel .about-value {
+  flex: 1;
+  text-align: right;
+  color: #fff;
+  font-size: 14px;
+}
+
+/* Back button for about screen */
+.about-screen .back-button {
+  margin-top: 20px;
+}
+
+/* ============================================================
+   Loading Screen
+   ============================================================ */
+
+/* Fullscreen fixed overlay with flex centering */
+.loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 3000;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: auto;
+}
+
+/* Hidden state for loading screen */
+.loading-screen.hidden {
+  display: none !important;
+  pointer-events: none;
+}
+
+/* Loading title — pixel-style font with glow */
+.loading-screen .loading-title {
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  font-size: 32px;
+  color: #fff;
+  text-align: center;
+  margin: 0 0 30px 0;
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.5),
+    0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+/* Progress bar track */
+.loading-screen .loading-bar-container {
+  position: relative;
+  width: 400px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  margin-bottom: 0;
+}
+
+/* Progress bar fill */
+.loading-screen .loading-bar-fill {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  background: linear-gradient(90deg, #4a9eff, #7ac0ff);
+  border-radius: 12px;
+  transition: width 0.2s ease;
+  box-shadow: 0 0 8px rgba(74, 158, 255, 0.5);
+}
+
+/* Percentage label */
+.loading-screen .loading-percentage {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+  font-size: 16px;
+  margin-top: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+/* ============================================================
+   Responsive Styles — screens under 600px
+   ============================================================ */
+
+@media (max-width: 600px) {
+  /* Shrink menu title */
+  .menu-screen .menu-title {
+    font-size: 32px;
+  }
+
+  /* Shrink pause/controls/about titles */
+  .pause-menu .menu-title,
+  .controls-screen .menu-title,
+  .about-screen .menu-title {
+    font-size: 28px;
+  }
+
+  /* Shrink loading title */
+  .loading-screen .loading-title {
+    font-size: 24px;
+  }
+
+  /* Shrink menu buttons */
+  .menu-screen .menu-button {
+    min-width: 180px;
+    padding: 12px 24px;
+    font-size: 16px;
+  }
+
+  /* Shrink controls table */
+  .controls-table {
+    min-width: 280px;
+  }
+
+  .controls-table th,
+  .controls-table td {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  /* Shrink about panel */
+  .about-panel {
+    min-width: 280px;
+    padding: 16px 20px;
+  }
+
+  .about-panel .about-label,
+  .about-panel .about-value {
+    font-size: 12px;
+  }
+
+  /* Shrink loading bar */
+  .loading-screen .loading-bar-container {
+    width: 280px;
+    height: 20px;
+  }
+
+  .loading-screen .loading-percentage {
+    font-size: 14px;
+  }
+
+  /* Reduce margins */
+  .menu-screen .menu-title {
+    margin: 0 0 24px 0;
+  }
+
+  .loading-screen .loading-title {
+    margin: 0 0 20px 0;
+  }
+
+  .controls-screen .menu-title,
+  .about-screen .menu-title {
+    margin: 0 0 20px 0;
+  }
+
+  .menu-screen .back-button {
+    margin-bottom: 24px;
+  }
+}
+
+/* Extra-small screens — even smaller */
+@media (max-width: 400px) {
+  .menu-screen .menu-title {
+    font-size: 26px;
+  }
+
+  .pause-menu .menu-title,
+  .controls-screen .menu-title,
+  .about-screen .menu-title {
+    font-size: 22px;
+  }
+
+  .loading-screen .loading-title {
+    font-size: 20px;
+  }
+
+  .menu-screen .menu-button {
+    min-width: 150px;
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+
+  .controls-table {
+    min-width: 240px;
+  }
+
+  .about-panel {
+    min-width: 240px;
+  }
+
+  .loading-screen .loading-bar-container {
+    width: 220px;
+  }
+}
